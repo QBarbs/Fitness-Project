@@ -85,7 +85,7 @@ class AIGym(BaseSolution):
                     stage_text=self.stage[ind],  # stage position text
                     center_kpt=k[int(self.kpts[1])],  # center keypoint for display
                 )
-
+                
         self.display_output(im0)  # Display output image, if environment support display
         return im0  # return an image for writing or further usage
     
@@ -105,8 +105,15 @@ class AIGym(BaseSolution):
         # squat = {{"primary_left": [left_hip, left_knee, left_leg]}, 
         #          {"primary_right": [right_hip, right_knee, right_leg]}
         #          }
+
+        # self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
+        #     self.eyes_kpts = np.array([k[int(self.kpts[body.left_eye])].cpu().numpy(), k[int(self.kpts[body.right_eye])].cpu().numpy()])
+        #     self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
+        #     self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
+        #     self.knee_kpts = np.array([k[int(self.kpts[body.left_knee])].cpu().numpy(), k[int(self.kpts[body.right_knee])].cpu().numpy()])
         self.up_angle = 170.0
         self.down_angle = 95.0
+        self.kpts_two = [11, 13, 15]
         if tracks.boxes.id is not None:
             # Extract and check keypoints
             if len(tracks) > len(self.count):
@@ -121,39 +128,34 @@ class AIGym(BaseSolution):
             # Enumerate over keypoints
             for ind, k in enumerate(reversed(tracks.keypoints.data)):
                 # Get keypoints and estimate the angle
-                kpts = [k[int(self.kpts[i])].cpu() for i in range(3)]
+                kpts = [k[int(self.kpts_two[i])].cpu() for i in range(3)]
                 self.angle[ind] = self.annotator.estimate_pose_angle(*kpts)
 
-                im0 = self.annotator.draw_specific_points(k, self.kpts, radius=self.lw * 3)
+                im0 = self.annotator.draw_specific_points(k, self.kpts_two, radius=self.lw * 3)
                 # Determine stage and count logic based on angle thresholds
                 if self.angle[ind] < self.down_angle:
-                    self.feedback = self.check_squat_form(self, im0, k, "up")
+                    self.feedback = self.check_squat_form(im0, k=self.kpts, phase="down")
                     if self.stage[ind] == "up":
                         self.count[ind] += 1
                     self.stage[ind] = "down"
                 elif self.angle[ind] > self.up_angle:
                     self.stage[ind] = "up"
-
-                # Display angle, count, and stage text
+                    self.feedback = self.check_squat_form(im0, k=self.kpts, phase="up")
+                # Display angle, count, stage text, and feedback
                 self.annotator.plot_angle_and_count_and_stage(
                     angle_text=self.angle[ind],  # angle text for display
                     count_text=self.count[ind],  # count text for workouts
                     stage_text=self.stage[ind],  # stage position text
-                    center_kpt=k[int(self.kpts[1])],  # center keypoint for display
+                    center_kpt=k[int(self.kpts_two[1])],  # center keypoint for display
                 )
+                # self.annotator.plot_workout_information(self.feedback, position=(self.kpts[0], self.kpts[1]))
+                print("Feedback: " + self.feedback)
 
         self.display_output(im0)  # Display output image, if environment support display
         return im0  # return an image for writing or further usage
     
     def check_squat_form(self, im0, k, phase):
         self.feedback = ""
-        self.left_torso_kpts = [k[int(self.kpts[body.left_shoulder, body.left_hip, body.left_knee])].cpu()]
-        self.right_torso_kpts = [k[int(self.kpts[body.right_shoulder, body.right_hip, body.right_knee])].cpu()]
-        self.left_torso_angle = self.annotator.estimate_pose_angle(*self.left_torso_kpts)
-        self.right_torso_angle = self.annotator.estimate_pose_angle(*self.right_torso_angle)
-
-        left_parallel_coordinates = [k[int(body.left_hip, body.left_knee, body.left_leg)].cpu().numpy()]
-        right_parallel_coordinates = [k[int(body.right_hip, body.right_knee, body.right_leg)].cpu().numpy()]
         tolerance = 0
         # Check user's form when in "up" part of squat
         if phase == "up":
@@ -165,21 +167,20 @@ class AIGym(BaseSolution):
             tolerance = 5
             # Checks head alignment first
             if abs(self.eyes_kpts[0][0] - self.eyes_kpts[1][0]) > tolerance:
-                self.feedback = self.feedback + "Align head to neutral position (Horizontally)."
-            #Plagarism?
+                self.feedback = self.feedback + "Align head to neutral position (Horizontally). "
 
             tolerance = 15
             if abs(self.eyes_kpts[0][1] - self.shoulders_kpts[0][1]) < tolerance or abs(self.eyes_kpts[1][1] - self.shoulders_kpts[1][1]):
-                self.feedback = self.feedback + "Align head to neutral position (Vertically)."
+                self.feedback = self.feedback + "Align head to neutral position (Vertically). "
 
             # Hip checking
             tolerance = 5
             if abs(self.hips_kpts[0][0] - self.shoulders_kpts[0][0]) > tolerance or abs(self.hips_kpts[1][0] - self.shoulders_kpts[1][0]) > tolerance:
-                self.feedback = self.feedback + "Align hips with shoulders."
+                self.feedback = self.feedback + "Align hips with shoulders. "
 
             tolerance = 5
             if abs(self.knee_kpts[0][0]-self.hips_kpts[0][0]) > tolerance or abs(self.knee_kpts[1][0]-self.hips_kpts[1][0]) > tolerance:
-                self.feedback = self.feedback + "Align knees with hips."
+                self.feedback = self.feedback + "Align knees with hips. "
 
         # CHeck user's form when in "down" part of squat
         else:
@@ -191,18 +192,17 @@ class AIGym(BaseSolution):
 
             tolerance = 5
             if abs(self.hips_kpts[0][1]-self.knee_kpts[0][1]) > tolerance or abs(self.hips_kpts[1][1]-self.knee_kpts[1][1]) > tolerance:
-                self.feedback = self.feedback + "Squat at or below hip level."
+                self.feedback = self.feedback + "Squat at or below hip level. "
 
             if self.check_distance(self.shoulders_kpts[0][0], self.hips_kpts[0][0], 5, "<") is False or self.check_distance(self.shoulders_kpts[1][0], self.hips_kpts[1][0], 5, "<") is False:
-                self.feedback = self.feedback + "Align shoulders and hips. Keep the spine neutral without excessive rounding." 
+                self.feedback = self.feedback + "Align shoulders and hips. Keep the spine neutral without excessive rounding. " 
 
         # If no feedback is given (no problems are present in user's form), the feedback will just
         # contain a string saying that the user's form has no current issues.
         if self.feedback == "":
             self.feedback = "No form issues currently present."
         
-        return self.feedback
-            
+        return self.feedback    
 
     def monitor_bench(self, im0):
         """
@@ -257,6 +257,47 @@ class AIGym(BaseSolution):
         self.display_output(im0)  # Display output image, if environment support display
         return im0  # return an image for writing or further usage    
     
+    def check_bench_form(self, im0, k, phase, ind):
+        self.feedback = ""
+        self.elbows_kpts = [k(int(self.kpts[body.left_elbow]).cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy())]
+        self.wrists_kpts = [k(int(self.kpts[body.left_wrist]).cpu().numpy(), k[int(self.kpts[body.right_wrist])].cpu().numpy())]
+        self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
+        self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
+        # Check user's form when in "up" part of bench
+        if phase == "up":
+
+            # Checks head alignment first
+            if self.check_distance(self.wrists_kpts[0][0], self.shoulders_kpts[0][0], 5, "<") is False or self.check_distance(self.wrists_kpts[1][0], self.shoulders_kpts[1][0], 5, "<") is False:
+                self.feedback = self.feedback + "Align wrists to shoulder-width, or slightly wider than shoulder-width."
+
+            if self.annotator.estimate_pose_angle(k(int(self.kpts[body.left_elbow]).cpu()) * k(int(self.kpts[body.left_shoulder]).cpu()) * k(int(self.kpts[body.left_wrist]).cpu().numpy())) <= 40.0 or self.annotator.estimate_pose_angle(k(int(self.kpts[body.left_elbow]).cpu()) * k(int(self.kpts[body.left_shoulder]).cpu()) * k(int(self.kpts[body.left_wrist]).cpu().numpy())) >= 50.0:
+                self.feedback = self.feedback + "Adjust elbows to 45 degrees relative to torso."
+
+            
+            
+
+
+        # CHeck user's form when in "down" part of squat
+        else:
+            self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
+            self.eyes_kpts = np.array([k[int(self.kpts[body.left_eye])].cpu().numpy(), k[int(self.kpts[body.right_eye])].cpu().numpy()])
+            self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
+            self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
+            self.knee_kpts = np.array([k[int(self.kpts[body.left_knee])].cpu().numpy(), k[int(self.kpts[body.right_knee])].cpu().numpy()])
+
+            tolerance = 5
+            if abs(self.hips_kpts[0][1]-self.knee_kpts[0][1]) > tolerance or abs(self.hips_kpts[1][1]-self.knee_kpts[1][1]) > tolerance:
+                self.feedback = self.feedback + "Squat at or below hip level."
+
+            if self.check_distance(self.shoulders_kpts[0][0], self.hips_kpts[0][0], 5, "<") is False or self.check_distance(self.shoulders_kpts[1][0], self.hips_kpts[1][0], 5, "<") is False:
+                self.feedback = self.feedback + "Align shoulders and hips. Keep the spine neutral without excessive rounding." 
+
+        # If no feedback is given (no problems are present in user's form), the feedback will just
+        # contain a string saying that the user's form has no current issues.
+        if self.feedback == "":
+            self.feedback = "No form issues currently present."
+        
+        return self.feedback
 
     # def check_form(angle):
     """""
@@ -264,7 +305,7 @@ class AIGym(BaseSolution):
     the two numbers.
 
     """""
-    def check_distance(num_1, num_2, tolerance, sign):
+    def check_distance(self, num_1, num_2, tolerance, sign):
         match sign:
             case "<":
                 if abs(num_1-num_2) < tolerance:
@@ -296,7 +337,7 @@ class AIGym(BaseSolution):
                 else:
                     return False
             
-            case other:
+            case _:
                 return None
 
 
