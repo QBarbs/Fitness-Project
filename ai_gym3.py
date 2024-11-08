@@ -106,14 +106,10 @@ class AIGym(BaseSolution):
         #          {"primary_right": [right_hip, right_knee, right_leg]}
         #          }
 
-        # self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
-        #     self.eyes_kpts = np.array([k[int(self.kpts[body.left_eye])].cpu().numpy(), k[int(self.kpts[body.right_eye])].cpu().numpy()])
-        #     self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
-        #     self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
-        #     self.knee_kpts = np.array([k[int(self.kpts[body.left_knee])].cpu().numpy(), k[int(self.kpts[body.right_knee])].cpu().numpy()])
+
         self.up_angle = 170.0
         self.down_angle = 95.0
-        self.kpts_two = [11, 13, 15]
+        # self.kpts = [body.nose, body.left_eye, body.right_eye, body.left_hip, body.right_hip, body.left_shoulder, body.right_shoulder, body.left_ear, body.right_ear]
         if tracks.boxes.id is not None:
             # Extract and check keypoints
             if len(tracks) > len(self.count):
@@ -128,25 +124,26 @@ class AIGym(BaseSolution):
             # Enumerate over keypoints
             for ind, k in enumerate(reversed(tracks.keypoints.data)):
                 # Get keypoints and estimate the angle
-                kpts = [k[int(self.kpts_two[i])].cpu() for i in range(3)]
-                self.angle[ind] = self.annotator.estimate_pose_angle(*kpts)
+                kpts = [k[int(self.kpts[i])].cpu() for i in range(len(self.kpts))]
+                self.kpts_for_angle = [kpts[body.left_hip], kpts[body.left_knee], kpts[body.left_hip]]
+                self.angle[ind] = self.annotator.estimate_pose_angle(*self.kpts_for_angle)
 
-                im0 = self.annotator.draw_specific_points(k, self.kpts_two, radius=self.lw * 3)
+                im0 = self.annotator.draw_specific_points(k, self.kpts_for_angle, radius=self.lw * 3)
                 # Determine stage and count logic based on angle thresholds
                 if self.angle[ind] < self.down_angle:
-                    self.feedback = self.check_squat_form(im0, k=self.kpts, phase="down")
+                    self.feedback = self.check_squat_form(im0, k=kpts, phase="down")
                     if self.stage[ind] == "up":
                         self.count[ind] += 1
                     self.stage[ind] = "down"
                 elif self.angle[ind] > self.up_angle:
                     self.stage[ind] = "up"
-                    self.feedback = self.check_squat_form(im0, k=self.kpts, phase="up")
+                    self.feedback = self.check_squat_form(im0, k=kpts, phase="up")
                 # Display angle, count, stage text, and feedback
                 self.annotator.plot_angle_and_count_and_stage(
                     angle_text=self.angle[ind],  # angle text for display
                     count_text=self.count[ind],  # count text for workouts
                     stage_text=self.stage[ind],  # stage position text
-                    center_kpt=k[int(self.kpts_two[1])],  # center keypoint for display
+                    center_kpt=k[int(self.kpts[body.left_knee])],  # center keypoint for display
                 )
                 # self.annotator.plot_workout_information(self.feedback, position=(self.kpts[0], self.kpts[1]))
                 print("Feedback: " + self.feedback)
