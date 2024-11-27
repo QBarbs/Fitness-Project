@@ -36,6 +36,7 @@ class AIGym(BaseSolution):
         self.exercise = "squat"  # squat, bench, deadlift
         self.feedback = ""
         self.prev_feedback = ""
+        self.squat_stance = ""
 
     def monitor(self, im0):
         """
@@ -137,18 +138,42 @@ class AIGym(BaseSolution):
 
                 self.left_angle[ind] = self.annotator.estimate_pose_angle(*left_kpts_angle)
                 self.right_angle[ind] = self.annotator.estimate_pose_angle(*right_kpts_angle)
+
+                print("Left hip variable x: ")
+                print(kpts[body.left_hip][0])
+                print("Body's left hip: ")
+                print(kpts[body.left_hip])
+
+                mid_x = (kpts[body.left_shoulder][0] + kpts[body.left_hip][0]) / 2
+                mid_y = (kpts[body.left_shoulder][1] + kpts[body.left_hip][1]) / 2
+                midpoint = (mid_x, mid_y)
+                print("Midpoint: ")
+                print(midpoint)
+                left_mid_kpts = [k[int(self.kpts[body.left_shoulder])].cpu(), midpoint, k[int(self.kpts[body.left_hip])].cpu()]
+                left_mid_angle = self.annotator.estimate_pose_angle(*left_mid_kpts)
+
+                # midpoint_xx = (kpts[body.left_shoulder] + kpts[body.left_hip]) / 2
+                # midpoint_yy = 
                 angles = [self.left_angle, self.right_angle]
 
                 im0 = self.annotator.draw_specific_points(k, [11, 12, 13, 14, 15, 16], radius=self.lw * 3)
                 # Determine stage and count logic based on angle thresholds
                 if self.left_angle[ind] and self.right_angle[ind] < self.down_angle:
                     self.feedback = self.check_squat_form(im0, k=kpts, phase="down")
-                    if self.stage[ind] == "up":
+                    if self.stage[ind] == "up" or self.stage[ind] == "Going down":
                         self.count[ind] += 1
                     self.stage[ind] = "down"
                 elif self.left_angle[ind] and self.right_angle[ind] > self.up_angle:
                     self.stage[ind] = "up"
                     self.feedback = self.check_squat_form(im0, k=kpts, phase="up")
+
+                # Check this out again to make sure it's fine. Might need more work to have it "finished"
+                elif self.down_angle <= self.left_angle[ind] <= self.up_angle and self.down_angle <= self.right_angle[ind] <= self.up_angle:
+                    if self.stage[ind] == "up":
+                        self.stage[ind] = "Going down"
+                    elif self.stage[ind] == "down":
+                        self.stage[ind] = "Going up"
+
                 # Display angle, count, stage text, and feedback
                 self.annotator.plot_angle_and_count_and_stage(
                     angle_text=self.left_angle[ind] + self.right_angle[ind],  # angle text for display
@@ -157,9 +182,11 @@ class AIGym(BaseSolution):
                     center_kpt=k[int(self.kpts[body.left_knee])],  # center keypoint for display
                 )
 
-                if self.feedback != self.prev_feedback:
+                # if self.feedback != self.prev_feedback:
                 # self.annotator.plot_workout_information(self.feedback, position=(self.kpts[0], self.kpts[1]))
-                    print("Feedback: " + self.feedback)
+                self.annotator.plot_workout_information(self.feedback, position=(0, 60))
+
+                    # print("Feedback: " + self.feedback)
                 # elif :
                 #     print("Feedback: No form issues currently present.")
                 self.prev_feedback = self.feedback
@@ -170,6 +197,11 @@ class AIGym(BaseSolution):
     def check_squat_form(self, im0, k, phase):
         self.feedback = ""
         tolerance = 0
+        mid_x = (kpts[body.left_shoulder][0] + kpts[body.left_hip][0]) / 2
+        mid_y = (kpts[body.left_shoulder][1] + kpts[body.left_hip][1]) / 2
+        midpoint = (mid_x, mid_y)
+        left_mid_kpts = [k[int(self.kpts[body.left_shoulder])].cpu(), midpoint, k[int(self.kpts[body.left_hip])].cpu()]
+        left_mid_angle = self.annotator.estimate_pose_angle(*left_mid_kpts)
         # Check user's form when in "up" part of squat
         if phase == "up":
             self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
@@ -177,21 +209,21 @@ class AIGym(BaseSolution):
             self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
             self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
             self.knee_kpts = np.array([k[int(self.kpts[body.left_knee])].cpu().numpy(), k[int(self.kpts[body.right_knee])].cpu().numpy()])
-            tolerance = 10
+            tolerance = 30
             # Checks head alignment first
             if abs(self.eyes_kpts[0][0] - self.eyes_kpts[1][0]) > tolerance:
                 self.feedback = self.feedback + "Align head to neutral position (Horizontally). "
 
-            tolerance = 10
+            tolerance = 30
             if abs(self.eyes_kpts[0][1] - self.shoulders_kpts[0][1]) > tolerance or abs(self.eyes_kpts[1][1] - self.shoulders_kpts[1][1]) > tolerance:
                 self.feedback = self.feedback + "Align head to neutral position (Vertically). "
 
             # Hip checking
-            tolerance = 10
+            tolerance = 30
             if abs(self.hips_kpts[0][0] - self.shoulders_kpts[0][0]) > tolerance or abs(self.hips_kpts[1][0] - self.shoulders_kpts[1][0]) > tolerance:
                 self.feedback = self.feedback + "Align hips with shoulders. "
 
-            tolerance = 10
+            tolerance = 30
             if abs(self.knee_kpts[0][0]-self.hips_kpts[0][0]) > tolerance or abs(self.knee_kpts[1][0]-self.hips_kpts[1][0]) > tolerance:
                 self.feedback = self.feedback + "Align knees with hips. "
 
@@ -207,7 +239,7 @@ class AIGym(BaseSolution):
             if abs(self.hips_kpts[0][1]-self.knee_kpts[0][1]) > tolerance or abs(self.hips_kpts[1][1]-self.knee_kpts[1][1]) > tolerance:
                 self.feedback = self.feedback + "Squat at or below hip level. "
 
-            if self.check_distance(self.shoulders_kpts[0][0], self.hips_kpts[0][0], 10, "<") is False or self.check_distance(self.shoulders_kpts[1][0], self.hips_kpts[1][0], 10, "<") is False:
+            if self.check_distance(self.shoulders_kpts[0][0], self.hips_kpts[0][0], 30, "<") is False or self.check_distance(self.shoulders_kpts[1][0], self.hips_kpts[1][0], 30, "<") is False:
                 self.feedback = self.feedback + "Align shoulders and hips. Keep the spine neutral without excessive rounding. " 
 
         # If no feedback is given (no problems are present in user's form), the feedback will just
