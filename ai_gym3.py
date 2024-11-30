@@ -5,6 +5,7 @@ from ultralytics.utils.plotting import Annotator
 import body_mappings as body
 import math
 import numpy as np
+import pyttsx3
 
 class AIGym(BaseSolution):
     """A class to manage the gym steps of people in a real-time video stream based on their poses."""
@@ -37,6 +38,10 @@ class AIGym(BaseSolution):
         self.feedback = ""
         self.prev_feedback = ""
         self.squat_stance = ""
+
+        # TTS Setup
+        engine = pyttsx3.init()
+
 
     def monitor(self, im0):
         """
@@ -139,26 +144,9 @@ class AIGym(BaseSolution):
                 self.left_angle[ind] = self.annotator.estimate_pose_angle(*left_kpts_angle)
                 self.right_angle[ind] = self.annotator.estimate_pose_angle(*right_kpts_angle)
 
-                print("Left hip variable x: ")
-                print(kpts[body.left_hip][0])
-                print("Body's left hip: ")
-                print(kpts[body.left_hip])
-
-                mid_x = (kpts[body.left_shoulder][0] + kpts[body.left_hip][0]) / 2
-                mid_y = (kpts[body.left_shoulder][1] + kpts[body.left_hip][1]) / 2
-                midpoint = (mid_x, mid_y)
-                print("Midpoint: ")
-                print(midpoint)
-                left_mid_kpts = [k[int(self.kpts[body.left_shoulder])].cpu(), midpoint, k[int(self.kpts[body.left_hip])].cpu()]
-                left_mid_angle = self.annotator.estimate_pose_angle(*left_mid_kpts)
-
-                # midpoint_xx = (kpts[body.left_shoulder] + kpts[body.left_hip]) / 2
-                # midpoint_yy = 
-                angles = [self.left_angle, self.right_angle]
-
                 im0 = self.annotator.draw_specific_points(k, [11, 12, 13, 14, 15, 16], radius=self.lw * 3)
                 # Determine stage and count logic based on angle thresholds
-                if self.left_angle[ind] and self.right_angle[ind] < self.down_angle:
+                if self.left_angle[ind] < self.down_angle and self.right_angle[ind] < self.down_angle:
                     self.feedback = self.check_squat_form(im0, k=kpts, phase="down")
                     if self.stage[ind] == "up" or self.stage[ind] == "Going down":
                         self.count[ind] += 1
@@ -196,12 +184,22 @@ class AIGym(BaseSolution):
     
     def check_squat_form(self, im0, k, phase):
         self.feedback = ""
-        tolerance = 0
-        mid_x = (kpts[body.left_shoulder][0] + kpts[body.left_hip][0]) / 2
-        mid_y = (kpts[body.left_shoulder][1] + kpts[body.left_hip][1]) / 2
-        midpoint = (mid_x, mid_y)
-        left_mid_kpts = [k[int(self.kpts[body.left_shoulder])].cpu(), midpoint, k[int(self.kpts[body.left_hip])].cpu()]
+        tolerance = 169.0
+        left_mid_x = (k[body.left_shoulder][0] + k[body.left_hip][0]) / 2
+        left_mid_y = (k[body.left_shoulder][1] + k[body.left_hip][1]) / 2
+        left_mid = (left_mid_x, left_mid_y)
+        left_mid_kpts = [k[int(self.kpts[body.left_shoulder])].cpu(), left_mid, k[int(self.kpts[body.left_hip])].cpu()]
         left_mid_angle = self.annotator.estimate_pose_angle(*left_mid_kpts)
+
+        right_mid_x = (k[body.right_shoulder][0] + k[body.right_hip][0]) / 2
+        right_mid_y = (k[body.right_shoulder][1] + k[body.right_hip][1]) / 2
+        right_mid = (right_mid_x, right_mid_y)
+        right_mid_kpts = [k[int(self.kpts[body.right_shoulder])].cpu(), right_mid, k[int(self.kpts[body.right_hip])].cpu()]
+        right_mid_angle = self.annotator.estimate_pose_angle(*right_mid_kpts)
+        print("Back angle = ")
+        print((left_mid_angle + right_mid_angle)/2)
+        if left_mid_angle < tolerance or right_mid_angle < tolerance:
+            self.feedback = self.feedback + "Align back to neutral position. "
         # Check user's form when in "up" part of squat
         if phase == "up":
             self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
@@ -249,106 +247,11 @@ class AIGym(BaseSolution):
         
         return self.feedback    
 
-    def monitor_bench(self, im0):
-        """
-        Monitor the workouts using Ultralytics YOLOv8 Pose Model: https://docs.ultralytics.com/tasks/pose/.
-
-        Args:
-            im0 (ndarray): The input image that will be used for processing
-        Returns
-            im0 (ndarray): The processed image for more usage
-        """
-        bench = {{"primary_left": [body.left_shoulder, body.left_elbow, body.left_wrist]}, 
-                 {"primary_right": [body.right_shoulder, body.right_elbow, body.right_wrist]},
-                 {"secondary": []}}
-
-        # Extract tracks
-        tracks = self.model.track(source=im0, persist=True, classes=self.CFG["classes"])[0]
-        if tracks.boxes.id is not None:
-            # Extract and check keypoints
-            if len(tracks) > len(self.count):
-                new_human = len(tracks) - len(self.count)
-                self.angle += [0] * new_human
-                self.count += [0] * new_human
-                self.stage += ["-"] * new_human
-            
-
-            # Initialize annotator
-            self.annotator = Annotator(im0, line_width=self.lw)
-
-            # Enumerate over keypoints
-            for ind, k in enumerate(reversed(tracks.keypoints.data)):
-                # Get keypoints and estimate the angle
-                kpts = [k[int(self.kpts[i])].cpu() for i in range(3)]
-                self.angle[ind] = self.annotator.estimate_pose_angle(*kpts)
-                im0 = self.annotator.draw_specific_points(k, self.kpts, radius=self.lw * 3)
-
-                # Determine stage and count logic based on angle thresholds
-                if self.angle[ind] < self.down_angle:
-                    if self.stage[ind] == "up":
-                        self.count[ind] += 1
-                    self.stage[ind] = "down"
-                elif self.angle[ind] > self.up_angle:
-                    self.stage[ind] = "up"
-
-                # Display angle, count, and stage text
-                self.annotator.plot_angle_and_count_and_stage(
-                    angle_text=self.angle[ind],  # angle text for display
-                    count_text=self.count[ind],  # count text for workouts
-                    stage_text=self.stage[ind],  # stage position text
-                    center_kpt=k[int(self.kpts[1])],  # center keypoint for display
-                )
-
-        self.display_output(im0)  # Display output image, if environment support display
-        return im0  # return an image for writing or further usage    
     
-    def check_bench_form(self, im0, k, phase, ind):
-        self.feedback = ""
-        self.elbows_kpts = [k(int(self.kpts[body.left_elbow]).cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy())]
-        self.wrists_kpts = [k(int(self.kpts[body.left_wrist]).cpu().numpy(), k[int(self.kpts[body.right_wrist])].cpu().numpy())]
-        self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
-        self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
-        # Check user's form when in "up" part of bench
-        if phase == "up":
-
-            # Checks head alignment first
-            if self.check_distance(self.wrists_kpts[0][0], self.shoulders_kpts[0][0], 5, "<") is False or self.check_distance(self.wrists_kpts[1][0], self.shoulders_kpts[1][0], 5, "<") is False:
-                self.feedback = self.feedback + "Align wrists to shoulder-width, or slightly wider than shoulder-width."
-
-            if self.annotator.estimate_pose_angle(k(int(self.kpts[body.left_elbow]).cpu()) * k(int(self.kpts[body.left_shoulder]).cpu()) * k(int(self.kpts[body.left_wrist]).cpu().numpy())) <= 40.0 or self.annotator.estimate_pose_angle(k(int(self.kpts[body.left_elbow]).cpu()) * k(int(self.kpts[body.left_shoulder]).cpu()) * k(int(self.kpts[body.left_wrist]).cpu().numpy())) >= 50.0:
-                self.feedback = self.feedback + "Adjust elbows to 45 degrees relative to torso."
-
-            
-            
-
-
-        # CHeck user's form when in "down" part of squat
-        else:
-            self.nose_kpt = [k[int(self.kpts[body.nose])].cpu().numpy()]
-            self.eyes_kpts = np.array([k[int(self.kpts[body.left_eye])].cpu().numpy(), k[int(self.kpts[body.right_eye])].cpu().numpy()])
-            self.hips_kpts = [k[int(self.kpts[body.left_hip])].cpu().numpy(), k[int(self.kpts[body.right_hip])].cpu().numpy()]
-            self.shoulders_kpts = np.array([k[int(self.kpts[body.left_shoulder])].cpu().numpy(), k[int(self.kpts[body.right_shoulder])].cpu().numpy()])
-            self.knee_kpts = np.array([k[int(self.kpts[body.left_knee])].cpu().numpy(), k[int(self.kpts[body.right_knee])].cpu().numpy()])
-
-            tolerance = 5
-            if abs(self.hips_kpts[0][1]-self.knee_kpts[0][1]) > tolerance or abs(self.hips_kpts[1][1]-self.knee_kpts[1][1]) > tolerance:
-                self.feedback = self.feedback + "Squat at or below hip level."
-
-            if self.check_distance(self.shoulders_kpts[0][0], self.hips_kpts[0][0], 5, "<") is False or self.check_distance(self.shoulders_kpts[1][0], self.hips_kpts[1][0], 5, "<") is False:
-                self.feedback = self.feedback + "Align shoulders and hips. Keep the spine neutral without excessive rounding." 
-
-        # If no feedback is given (no problems are present in user's form), the feedback will just
-        # contain a string saying that the user's form has no current issues.
-        if self.feedback == "":
-            self.feedback = "No form issues currently present."
-        
-        return self.feedback
-
     # def check_form(angle):
     """""
     Checks the distance between two numbers, and requires a tolerance and sign (greater than, less than or equal to, etc.) to compare
     the two numbers.
-
     """""
     def check_distance(self, num_1, num_2, tolerance, sign):
         match sign:
