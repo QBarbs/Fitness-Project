@@ -6,6 +6,9 @@ import body_mappings as body
 import math
 import numpy as np
 import pyttsx3
+import time
+import threading
+
 
 class AIGym(BaseSolution):
     """A class to manage the gym steps of people in a real-time video stream based on their poses."""
@@ -40,8 +43,8 @@ class AIGym(BaseSolution):
         self.squat_stance = ""
 
         # TTS Setup
-        engine = pyttsx3.init()
-
+        self.engine = pyttsx3.init()
+        self.engine.setProperty('rate', 125)
 
     def monitor(self, im0):
         """
@@ -177,11 +180,24 @@ class AIGym(BaseSolution):
                     # print("Feedback: " + self.feedback)
                 # elif :
                 #     print("Feedback: No form issues currently present.")
-                self.prev_feedback = self.feedback
+
+                if self.feedback != self.prev_feedback:
+                    self.engine.say(self.feedback)
+                    self.engine.runAndWait()
+                    self.prev_feedback = self.feedback
+                
 
         self.display_output(im0)  # Display output image, if environment support display
         return im0  # return an image for writing or further usage
     
+    def report_feedback(self):
+        if self.feedback != self.prev_feedback:
+            self.engine.say(self.feedback)
+            self.engine.runAndWait()
+            self.prev_feedback = self.feedback
+        
+                
+
     def check_squat_form(self, im0, k, phase):
         self.feedback = ""
         tolerance = 169.0
@@ -244,7 +260,6 @@ class AIGym(BaseSolution):
         # contain a string saying that the user's form has no current issues.
         if self.feedback == "":
             self.feedback = "No form issues currently present."
-        
         return self.feedback    
 
     
