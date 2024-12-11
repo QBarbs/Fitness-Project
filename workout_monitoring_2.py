@@ -5,13 +5,13 @@ import solutions2
 from ai_gym3 import AIGym
 
 
-cap = cv2.VideoCapture("Squats only 2.mp4")
-# cap = cv2.VideoCapture(0)
+# cap = cv2.VideoCapture("Squats only 2.mp4")
+cap = cv2.VideoCapture(0)
 assert cap.isOpened(), "Error reading video file"
 w, h, fps = (int(cap.get(x)) for x in (cv2.CAP_PROP_FRAME_WIDTH, cv2.CAP_PROP_FRAME_HEIGHT, cv2.CAP_PROP_FPS))
 
 
-vid_stride = 1
+vid_stride = 24
 frame_count = 0
 
 #From ultralytics
@@ -34,12 +34,14 @@ while cap.isOpened():
         print("Video frame is empty or video processing has been successfully completed.")
         break
 
-    if frame_count % vid_stride == 0:
-        im0 = gym.monitor_squat(im0)
+    # if frame_count % vid_stride == 0:
+    #     im0 = gym.monitor_squat(im0)
 
-    frame_count += 1
 
-    # im0 = gym.monitor_squat(im0)
+    im0 = gym.monitor_squat(im0)
+    # frame_count += 1
+    # if frame_count == (24 * 5):
+
 
     # From Ultalytics
     # video_writer.write(im0)
