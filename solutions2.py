@@ -13,8 +13,8 @@ check_requirements("shapely>=2.0.0")
 from shapely.geometry import LineString, Polygon
 
 DEFAULT_SOL_CFG_PATH = Path(__file__).resolve().parents[1] / "cfg/solutions/default.yaml"
-
-
+#QBGPT CODE ON LINE 17
+LOGGER.setLevel("WARNING")
 class BaseSolution:
     """A class to manage all the Ultralytics Solutions: https://docs.ultralytics.com/solutions/."""
 
