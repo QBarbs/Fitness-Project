@@ -1,11 +1,12 @@
 import cv2
 
-import solutions2
+import qb_solutions
 
-from ai_gym3 import AIGym
-
-
-# cap = cv2.VideoCapture("Squats only 2.mp4")
+from qb_ai_gym import AIGym
+# Use line 9 if you want to use a video or use line 10 to use your device's camera for form tracking
+# I recommend mp4 as it was the only one I used for this project, but
+# other file formats might be fine
+# cap = cv2.VideoCapture("<Insert video file path>) 
 cap = cv2.VideoCapture(0)
 assert cap.isOpened(), "Error reading video file"
 w, h, fps = (int(cap.get(x)) for x in (cv2.CAP_PROP_FRAME_WIDTH, cv2.CAP_PROP_FRAME_HEIGHT, cv2.CAP_PROP_FPS))
@@ -14,8 +15,9 @@ w, h, fps = (int(cap.get(x)) for x in (cv2.CAP_PROP_FRAME_WIDTH, cv2.CAP_PROP_FR
 vid_stride = 24
 frame_count = 0
 
+# Uncomment lines 19-20, lines 48-49, and line 54 if you want to save a video with CV annotations
 #From ultralytics
-# video_writer = cv2.VideoWriter("workouttest2.mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+# video_writer = cv2.VideoWriter("workouttest.mp4", cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
 #End
 
 gym = AIGym(
@@ -23,7 +25,7 @@ gym = AIGym(
     show=True,
     kpts=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
     kpts_angle=[11, 13, 15],
-    exercise="bench",
+    exercise="squat",
     up_angle=170.0,
     down_angle=95.0
 )
